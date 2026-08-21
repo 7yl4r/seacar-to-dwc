@@ -1,0 +1,34 @@
+# Crosswalk from SEACAR ParameterID (see the "Ref_Parameters" sheet shipped inside
+# every program's SEACAR_Metadata.xlsx) to Darwin Core MeasurementOrFact terms.
+#
+# `role` controls how a row for this parameter is used:
+#   - occurrence_status: does not become its own MeasurementOrFact row for a real
+#     taxon occurrence; instead it sets dwc:occurrenceStatus on the Occurrence
+#     (present_value/absent_value give the ResultValue -> status mapping). For
+#     SpeciesIDs that are NOT real taxa (see taxonomy.py: no ScientificName in
+#     Ref_Species, e.g. "Total seagrass", "No grass in quadrat") there is no
+#     Occurrence to attach to, so these rows fall back to being emitted as a
+#     plain event-level measurement instead.
+#   - measurement: always becomes a MeasurementOrFact row.
+parameters:
+  "69":
+    parameter_name: Presence/Absence
+    role: occurrence_status
+    present_value: "1"
+    absent_value: "0"
+    # fallback measurementType, used only when role=occurrence_status can't
+    # apply (non-taxon SpeciesID) and the row is emitted as a measurement instead
+    measurementType: "Presence/Absence"
+    measurementUnit: null
+    measurementMethod: null
+
+  "21":
+    parameter_name: Braun Blanquet Score
+    role: measurement
+    measurementType: "Percent Cover (Braun-Blanquet cover-abundance score)"
+    measurementUnit: null
+    measurementMethod: >-
+      Braun-Blanquet cover-abundance scale: 0.1 = solitary individual with
+      negligible cover; 0.5 = few individuals, cover small; 1 = numerous,
+      cover <5%; 2 = cover 5-25%; 3 = cover 26-50%; 4 = cover 51-75%;
+      5 = cover 76-100%.

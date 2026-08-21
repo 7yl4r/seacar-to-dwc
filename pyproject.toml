@@ -1,0 +1,32 @@
+[project]
+name = "seacar-to-dwc"
+version = "0.1.0"
+description = "Pipeline converting FL SEACAR program exports into Darwin Core Archives (Event core + Occurrence + eMoF)"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0",
+    "openpyxl>=3.1",
+    "requests>=2.28",
+    "lxml>=4.9",
+    "PyYAML>=6.0",
+    "pyarrow>=14.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+seacar-to-dwc = "seacar_to_dwc.pipeline:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# a globally-installed pytest-flake8 plugin in this environment is incompatible
+# with this pytest version (hookimpl signature mismatch) and crashes collection
+addopts = "-p no:flake8"

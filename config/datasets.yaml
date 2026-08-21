@@ -1,0 +1,7 @@
+# One entry per SEACAR program to pull through the pipeline.
+# `program_id` is the number at the end of the program's DDI page URL:
+#   https://data.florida-seacar.org/programs/details/{program_id}
+datasets:
+  - program_id: 570
+    habitat: SAV
+    notes: Charlotte Harbor Seagrass Monitoring (pilot dataset)
