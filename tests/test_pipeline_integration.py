@@ -35,9 +35,13 @@ def _fake_meta() -> ProgramMetadata:
 
 def test_full_local_pipeline_produces_a_valid_archive(sample_df, sample_xlsx_path, vocab, tmp_path):
     species_ref = taxonomy.load_species_reference(sample_xlsx_path)
+    fake_lsids = {
+        "Halodule wrightii": "urn:lsid:marinespecies.org:taxname:208925",
+        "Caulerpa": "urn:lsid:marinespecies.org:taxname:143816",
+    }
 
     event_df = build_events(sample_df)
-    occurrence_df = build_occurrences(sample_df, species_ref, vocab)
+    occurrence_df = build_occurrences(sample_df, species_ref, vocab, lsids=fake_lsids)
     emof_df = build_emof(sample_df, species_ref, vocab)
 
     eml_bytes = build_eml(
@@ -81,7 +85,7 @@ def test_full_local_pipeline_produces_a_valid_archive(sample_df, sample_xlsx_pat
 
         assert len(event_rows) == 2
         assert len(occ_rows) == 3
-        assert len(mof_rows) == 7
+        assert len(mof_rows) == 5  # Presence/Absence rows are dropped -- see occurrenceStatus below
 
         event_ids = {r["eventID"] for r in event_rows}
         # every occurrence and every measurement must key back to a real event (coreid linkage)
@@ -92,3 +96,12 @@ def test_full_local_pipeline_produces_a_valid_archive(sample_df, sample_xlsx_pat
         taxon_level_facts = [r for r in mof_rows if r["occurrenceID"]]
         assert taxon_level_facts, "expected at least one occurrence-level measurement"
         assert {r["occurrenceID"] for r in taxon_level_facts} <= occurrence_ids
+
+        # Presence/Absence must not appear anywhere in eMoF -- occurrenceStatus is what it's for
+        assert all(r["measurementType"] != "Presence/Absence" for r in mof_rows)
+
+        assert all(r["basisOfRecord"] == "HumanObservation" for r in occ_rows)
+        assert all(r["occurrenceStatus"] for r in occ_rows)
+        by_name = {r["scientificName"]: r for r in occ_rows}
+        assert by_name["Halodule wrightii"]["scientificNameID"] == "urn:lsid:marinespecies.org:taxname:208925"
+        assert by_name["Caulerpa spp."]["scientificNameID"] == "urn:lsid:marinespecies.org:taxname:143816"

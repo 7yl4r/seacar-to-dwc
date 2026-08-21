@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from . import archive, discover, fetch, parse, taxonomy
+from . import archive, discover, fetch, parse, taxonomy, worms
 from .eml import build_eml
 from .transform.emof import build_emof
 from .transform.event import build_events
@@ -70,9 +70,17 @@ def run_pipeline(program_id: int | str, data_root: Path = DEFAULT_DATA_ROOT, con
     with open(config_root / "measurement_vocab.yaml") as f:
         vocab = yaml.safe_load(f)
 
+    logger.info("=== program %s: WoRMS scientificNameID lookup ===", program_id)
+    query_names = {
+        taxonomy.worms_query_name(taxonomy.lookup(species_ref, sid))
+        for sid in df["SpeciesID"].unique()
+    }
+    query_names.discard(None)
+    lsids = worms.resolve_lsids(query_names, cache_path=data_root / "03_taxonomy_cache" / "worms_lsids.json")
+
     logger.info("=== program %s: transform ===", program_id)
     event_df = build_events(df)
-    occurrence_df = build_occurrences(df, species_ref, vocab)
+    occurrence_df = build_occurrences(df, species_ref, vocab, lsids=lsids)
     emof_df = build_emof(df, species_ref, vocab)
 
     processed_dir = data_root / "04_processed" / program_id

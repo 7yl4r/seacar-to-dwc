@@ -17,7 +17,7 @@ import logging
 import pandas as pd
 
 from ..keys import event_id, occurrence_id
-from ..taxonomy import lookup
+from ..taxonomy import lookup, worms_query_name
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ GROUP_COLS = ["ProgramID", "ProgramLocationID", "SampleDate", "QuadIdentifier", 
 
 OCCURRENCE_COLUMNS = [
     "occurrenceID", "eventID", "basisOfRecord", "occurrenceStatus",
-    "scientificName", "taxonRank", "kingdom", "phylum", "class", "order", "family", "genus",
+    "scientificName", "scientificNameID", "taxonRank", "kingdom", "phylum", "class", "order", "family", "genus",
     "vernacularName", "taxonID", "occurrenceRemarks",
 ]
 
@@ -37,9 +37,10 @@ def _status_parameter_id(vocab: dict) -> str:
     raise ValueError("measurement_vocab.yaml has no parameter with role: occurrence_status")
 
 
-def build_occurrences(df: pd.DataFrame, species_ref: pd.DataFrame, vocab: dict) -> pd.DataFrame:
+def build_occurrences(df: pd.DataFrame, species_ref: pd.DataFrame, vocab: dict, lsids: dict[str, str | None] | None = None) -> pd.DataFrame:
     status_parameter_id = _status_parameter_id(vocab)
     status_cfg = vocab["parameters"][status_parameter_id]
+    lsids = lsids or {}
 
     rows = []
     for key, group in df.groupby(GROUP_COLS, sort=False):
@@ -72,6 +73,7 @@ def build_occurrences(df: pd.DataFrame, species_ref: pd.DataFrame, vocab: dict) 
             "basisOfRecord": "HumanObservation",
             "occurrenceStatus": occurrence_status,
             "scientificName": taxon["scientificName"],
+            "scientificNameID": lsids.get(worms_query_name(taxon)),
             "taxonRank": taxon["taxonRank"],
             "kingdom": taxon["kingdom"],
             "phylum": taxon["phylum"],

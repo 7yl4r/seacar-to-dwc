@@ -55,6 +55,7 @@ OCCURRENCE_FIELDS = [
     ("basisOfRecord", f"{DWC}basisOfRecord"),
     ("occurrenceStatus", f"{DWC}occurrenceStatus"),
     ("scientificName", f"{DWC}scientificName"),
+    ("scientificNameID", f"{DWC}scientificNameID"),
     ("taxonRank", f"{DWC}taxonRank"),
     ("kingdom", f"{DWC}kingdom"),
     ("phylum", f"{DWC}phylum"),

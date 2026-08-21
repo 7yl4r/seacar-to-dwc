@@ -60,3 +60,14 @@ def lookup(species_ref: pd.DataFrame, species_id) -> dict:
     except (KeyError, ValueError):
         return {"is_taxon": False}
     return row.to_dict()
+
+
+def worms_query_name(taxon: dict) -> str | None:
+    """The name to hand WoRMS for this taxon: genus alone for genus-rank IDs
+    ("Caulerpa spp." isn't a WoRMS-matchable string; "Caulerpa" is), the full
+    scientificName otherwise."""
+    if not taxon.get("is_taxon"):
+        return None
+    if taxon.get("taxonRank") == "genus":
+        return taxon.get("genus")
+    return taxon.get("scientificName")

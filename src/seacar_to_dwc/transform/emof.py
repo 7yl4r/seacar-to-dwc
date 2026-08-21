@@ -1,16 +1,18 @@
 """Build the MeasurementOrFact extension.
 
-Every source row becomes one MeasurementOrFact record *except* a taxon's
-Presence/Absence reading, which becomes dwc:occurrenceStatus on the
-Occurrence instead (see transform/occurrence.py's docstring for why).
+Every source row becomes one MeasurementOrFact record *except* Presence/Absence
+readings (role: occurrence_status in measurement_vocab.yaml): for a real taxon
+that becomes dwc:occurrenceStatus on the Occurrence instead (see
+transform/occurrence.py), and for a non-taxon SpeciesID ("Total seagrass",
+"No grass in quadrat", "Drift algae") it is simply dropped -- occurrenceStatus
+is what that reading is for, so it need not appear in eMoF at all.
 
-Two attachment levels:
+Two attachment levels for the facts that remain:
   - taxon-level: occurrenceID is set -- the fact is about a specific
     species-in-quadrat (e.g. its Braun Blanquet cover score).
   - event-level: occurrenceID is blank, only eventID is set -- the fact is
     about the quadrat as a whole. This includes readings for non-taxon
-    SpeciesIDs ("Total seagrass", "No grass in quadrat", "Drift algae") since
-    those have no Occurrence to attach to.
+    SpeciesIDs, since those have no Occurrence to attach to.
 """
 from __future__ import annotations
 
@@ -48,11 +50,11 @@ def build_emof(df: pd.DataFrame, species_ref: pd.DataFrame, vocab: dict) -> pd.D
                 _warned_unknown_parameters.add(parameter_id)
             cfg = {"role": "measurement", "measurementType": row.ParameterName, "measurementUnit": row.ParameterUnits, "measurementMethod": None}
 
+        if cfg["role"] == "occurrence_status":
+            continue  # dwc:occurrenceStatus is what this reading is for, taxon or not
+
         taxon = lookup(species_ref, row.SpeciesID)
         is_taxon = taxon.get("is_taxon", False)
-
-        if cfg["role"] == "occurrence_status" and is_taxon:
-            continue  # captured as dwc:occurrenceStatus instead
 
         date_str = str(row.SampleDate.date())
         eid = event_id(row.ProgramID, row.ProgramLocationID, date_str, row.QuadIdentifier)

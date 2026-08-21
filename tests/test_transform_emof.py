@@ -9,16 +9,12 @@ def test_presence_absence_of_a_real_taxon_is_not_duplicated_as_a_measurement(sam
     assert len(taxon_pa) == 0
 
 
-def test_non_taxon_presence_absence_becomes_event_level_measurement(sample_df, species_ref, vocab):
-    # 15472 "Total seagrass" has no Occurrence to attach to, so its Presence/Absence
-    # reading must still show up somewhere -- as an event-level fact.
+def test_non_taxon_presence_absence_is_dropped_entirely(sample_df, species_ref, vocab):
+    # 15472 "Total seagrass" has no Occurrence to attach an occurrenceStatus to,
+    # but that reading is still what occurrenceStatus is *for* -- it's dropped
+    # from eMoF rather than reintroduced as a plain measurement.
     emof = build_emof(sample_df, species_ref, vocab)
-    total_seagrass_pa = emof[
-        (emof["occurrenceID"].isna())
-        & (emof["measurementType"] == "Presence/Absence")
-        & (emof["measurementRemarks"].str.contains("Total seagrass", na=False))
-    ]
-    assert len(total_seagrass_pa) == 2  # one per event in the fixture
+    assert len(emof[emof["measurementType"] == "Presence/Absence"]) == 0
 
 
 def test_braun_blanquet_score_is_occurrence_level_for_real_taxa(sample_df, species_ref, vocab):
@@ -37,8 +33,8 @@ def test_every_row_has_an_event_id(sample_df, species_ref, vocab):
 
 
 def test_total_measurement_count(sample_df, species_ref, vocab):
-    # 10 source rows minus 2 real-taxon Presence/Absence rows (2795 in each event,
-    # promoted to occurrenceStatus) = 8... except 5573 is also a taxon (genus rank),
-    # so its Presence/Absence row is promoted too: 10 - 3 = 7.
+    # 10 source rows minus all 5 Presence/Absence rows (dropped regardless of
+    # taxon status -- 2795 x2, 5573, and 15472 x2) leaves the 5 Braun Blanquet
+    # Score rows.
     emof = build_emof(sample_df, species_ref, vocab)
-    assert len(emof) == 7
+    assert len(emof) == 5

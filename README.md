@@ -42,13 +42,22 @@ whole transform -> archive path and checks the produced `meta.xml` / zip structu
   quadrat read -- "Total seagrass" (aggregate), "No grass in quadrat", "Drift algae" -- that
   have no `ScientificName` in the `Ref_Species` reference sheet. Their readings become
   event-level MeasurementOrFact rows (`occurrenceID` blank) instead of a fabricated Occurrence.
-- **occurrenceStatus, not a duplicate measurement**: a taxon's `Presence/Absence` reading sets
-  `dwc:occurrenceStatus` on its Occurrence rather than also being emitted as a MeasurementOrFact
-  (that would just restate the same fact in a second vocabulary). Only `Braun Blanquet Score`
-  becomes a MeasurementOrFact for real taxa.
+- **occurrenceStatus, not a duplicate measurement**: a `Presence/Absence` reading never becomes
+  a MeasurementOrFact row. For a real taxon it sets `dwc:occurrenceStatus` on its Occurrence
+  instead; for a non-taxon SpeciesID (no Occurrence to attach a status to) it is simply dropped
+  -- occurrenceStatus is what that reading is for, so it need not appear in the archive at all
+  either way. Only `Braun Blanquet Score` becomes a MeasurementOrFact.
 - **Taxonomy source**: the `Ref_Species` sheet SEACAR ships inside every export's
   `SEACAR_Metadata.xlsx`, not a live WoRMS API call -- it's what SEACAR itself already
   reconciled against WoRMS/Florida Plant Atlas, is offline, and matches every dataset exactly.
+  It gives `scientificName`/`kingdom`/.../`genus` but not the numeric AphiaID, so `worms.py`
+  separately resolves `dwc:scientificNameID` as a WoRMS LSID (e.g.
+  `urn:lsid:marinespecies.org:taxname:208925`) via `AphiaRecordsByMatchNames`, cached to
+  `data/03_taxonomy_cache/worms_lsids.json` so repeat runs don't re-query. Genus-rank IDs
+  ("Caulerpa spp.") are queried by genus alone (`taxonomy.worms_query_name`). Best-effort: a
+  taxon truly absent from WoRMS (e.g. *Vallisneria americana*, a freshwater species -- confirmed
+  via a direct API call returning 204 No Content, not a bug) just gets a blank
+  `scientificNameID`, logged as a warning, not a pipeline failure.
 
 ## Other data on the program page not currently folded into the archive
 
@@ -70,7 +79,3 @@ export zip link). The page also links to, per program:
   submission.xlsx`, the original `.accdb`) and prior seagrass reports (2016-2023 PDFs) --
   superseded by the standardized export for data purposes, kept only as provenance/citation
   material.
-- `scientificNameID` (WoRMS AphiaID) is left blank: `Ref_Species` doesn't carry the numeric
-  AphiaID itself, only the reconciled name and higher classification. A live WoRMS
-  `AphiaRecordsByMatchNames` lookup, cached per scientificName, would be a reasonable follow-up
-  enhancement (network access confirmed available in this environment).

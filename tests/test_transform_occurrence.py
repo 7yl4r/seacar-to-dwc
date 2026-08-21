@@ -33,3 +33,22 @@ def test_occurrence_carries_higher_taxonomy(sample_df, species_ref, vocab):
     assert halodule["kingdom"] == "Plantae"
     assert halodule["family"] == "Cymodoceaceae"
     assert halodule["basisOfRecord"] == "HumanObservation"
+
+
+def test_scientific_name_id_uses_worms_lsid_keyed_by_query_name(sample_df, species_ref, vocab):
+    # Halodule wrightii is species-rank, queried by full scientificName;
+    # Caulerpa spp. is genus-rank, queried by genus alone (see taxonomy.worms_query_name)
+    lsids = {
+        "Halodule wrightii": "urn:lsid:marinespecies.org:taxname:208925",
+        "Caulerpa": "urn:lsid:marinespecies.org:taxname:143816",
+    }
+    occ = build_occurrences(sample_df, species_ref, vocab, lsids=lsids)
+    halodule = occ[occ["scientificName"] == "Halodule wrightii"].iloc[0]
+    caulerpa = occ[occ["scientificName"] == "Caulerpa spp."].iloc[0]
+    assert halodule["scientificNameID"] == "urn:lsid:marinespecies.org:taxname:208925"
+    assert caulerpa["scientificNameID"] == "urn:lsid:marinespecies.org:taxname:143816"
+
+
+def test_scientific_name_id_blank_when_lsids_not_supplied(sample_df, species_ref, vocab):
+    occ = build_occurrences(sample_df, species_ref, vocab)
+    assert occ["scientificNameID"].isna().all()
