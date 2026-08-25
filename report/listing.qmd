@@ -1,0 +1,9 @@
+---
+title: "Datasets"
+description: "One report per FL SEACAR program processed into a Darwin Core Archive."
+listing:
+  contents: reports
+  type: grid
+  fields: [title, description, date]
+  sort: "date desc"
+---

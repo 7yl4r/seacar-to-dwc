@@ -1,0 +1,249 @@
+---
+title: "__TITLE__"
+description: "__DESCRIPTION__"
+date: "__DATE__"
+---
+
+<!--
+Filled in per-program by generate_reports.py (a pre-render step, see
+_quarto.yml) -- one copy of this file per dataset, following the same
+batch-generation pattern as https://github.com/7yl4r/quartobatch, just in
+Python since the rest of this pipeline is Python.
+This report exists for a reviewer who knows the field program to check the
+pipeline's choices at each step -- raw data, the transform's column mapping,
+and the transformed output -- and it pulls in content generated at each of
+those steps:
+  - report_meta.json / raw_data_profile.json (data/04_processed/<id>/):
+    deterministic facts, written by pipeline.py every run.
+  - config/datasets/<id>/summary.md, transform_notes.md: free-text write-ups,
+    drafted by an AI from the profile above and then edited/signed off by a
+    human reviewer (see docs_scaffold.py for the instructions files that
+    steer the drafting, and the `reviewed` front matter this report surfaces
+    as a warning banner until someone flips it to true).
+  - mapping_reference.md (this folder): the standardized column-mapping
+    write-up, identical for every dataset since the mapping is shared code,
+    not per-dataset config.
+Nothing here re-scrapes SEACAR, calls WoRMS, or re-runs any transform --
+nothing runs a new AI generation.
+-->
+<!-- (a blank line inside a markdown HTML comment ends the raw-HTML block
+early and leaks the rest as visible text -- keep this comment blank-line-free,
+or split it into several single-block comments like this, if it grows) -->
+
+```{python}
+#| label: setup
+#| echo: false
+import json
+from pathlib import Path
+
+import pandas as pd
+import yaml
+
+program_id = "__PROGRAM_ID__"  # baked in by generate_reports.py; quarto's jupyter
+# engine (unlike knitr) doesn't auto-populate a `params` object from front matter
+report_dir = Path("..")
+data_root = Path("../../data")
+config_root = Path("../../config")
+processed_dir = data_root / "04_processed" / program_id
+dataset_docs_dir = config_root / "datasets" / program_id
+
+meta = json.loads((processed_dir / "report_meta.json").read_text())
+raw_profile = json.loads((processed_dir / "raw_data_profile.json").read_text())
+vocab = yaml.safe_load((config_root / "measurement_vocab.yaml").read_text())["parameters"]
+
+event_df = pd.read_csv(processed_dir / "event.csv")
+occurrence_df = pd.read_csv(processed_dir / "occurrence.csv")
+emof_df = pd.read_csv(processed_dir / "emof.csv")
+
+
+def read_reviewable_doc(path: Path) -> tuple[dict, str]:
+    """Split a summary.md/transform_notes.md into (front matter, body). Front
+    matter is a standard top-of-file `---`-delimited YAML block; see
+    docs_scaffold.py for the convention (generated_by/reviewed/reviewed_by/
+    reviewed_at). Returns ({}, "") if the file doesn't exist yet -- it hasn't
+    been drafted, which the report should say plainly rather than error on."""
+    if not path.exists():
+        return {}, ""
+    text = path.read_text()
+    parts = text.split("---\n", 2) if text.startswith("---\n") else [text]
+    if len(parts) != 3:
+        return {}, text  # malformed front matter -- show the raw file rather than crash
+    _, fm_text, body = parts
+    return yaml.safe_load(fm_text) or {}, body.strip()
+
+
+def review_badge(front_matter: dict, instructions_path: Path) -> str:
+    if not front_matter:
+        return (
+            f"> ⚠️ **Not yet drafted.** See `{instructions_path}` for how to "
+            "write this up, grounded in the profile data below."
+        )
+    if front_matter.get("reviewed"):
+        return f"> ✅ Reviewed by {front_matter.get('reviewed_by')} on {front_matter.get('reviewed_at')}."
+    return (
+        f"> ⚠️ **Not yet reviewed by a data manager.** Drafted by "
+        f"{front_matter.get('generated_by', 'unknown')}; flip `reviewed: true` "
+        "in the front matter once checked."
+    )
+```
+
+```{python}
+#| output: asis
+#| echo: false
+print(f"**Organization:** {meta['organization']}\n")
+if meta["managed_areas"]:
+    print(f"**Managed area(s):** {', '.join(meta['managed_areas'])}\n")
+print(f"**Source:** [{meta['source_url']}]({meta['source_url']})\n")
+if meta["citation"]:
+    print(f"> {meta['citation']}")
+```
+
+## Raw data summary
+
+*AI-drafted, human-editable. Edit `config/datasets/__PROGRAM_ID__/summary.md`
+directly -- this section just renders it.*
+
+```{python}
+#| output: asis
+#| echo: false
+summary_fm, summary_body = read_reviewable_doc(dataset_docs_dir / "summary.md")
+print(review_badge(summary_fm, dataset_docs_dir / "summary.instructions.md"))
+print()
+print(summary_body or "_(nothing drafted yet)_")
+```
+
+### Raw data profile
+
+Deterministic, code-computed -- not AI-generated, recomputed by the pipeline every run.
+
+```{python}
+#| output: asis
+#| echo: false
+print(f"- **{raw_profile['row_count']:,}** raw rows, **{raw_profile['n_program_locations']}** stations, "
+      f"**{raw_profile['n_species_ids']}** distinct SpeciesIDs")
+print(f"- sample dates: {raw_profile['sample_date_range']['start']} to {raw_profile['sample_date_range']['end']}")
+print(f"- QAQC flags: " + ", ".join(f"`{k}` ({v:,})" for k, v in raw_profile["qaqc_flag_counts"].items()))
+if raw_profile["unresolved_species"]:
+    ids = ", ".join(f"{s['species_id']} ({s['common_identifier']})" for s in raw_profile["unresolved_species"])
+    print(f"\n> ⚠️ **{len(raw_profile['unresolved_species'])} SpeciesID(s) missing from Ref_Species entirely**, "
+          f"silently excluded from Occurrence: {ids}")
+if raw_profile["non_taxon_species"]:
+    ids = ", ".join(f"{s['species_id']} ({s['common_identifier']})" for s in raw_profile["non_taxon_species"])
+    print(f"\n- non-taxon placeholder codes present: {ids}")
+```
+
+## Coverage
+
+```{python}
+#| output: asis
+#| echo: false
+counts = meta["record_counts"]
+print(f"- **{counts['events']:,}** sampling events")
+print(f"- **{counts['occurrences']:,}** taxonomic occurrences")
+print(f"- **{counts['measurementOrFacts']:,}** measurements")
+if meta["date_range"]:
+    print(f"- date range: {meta['date_range']['start']} to {meta['date_range']['end']}")
+if meta["bbox"]:
+    b = meta["bbox"]
+    print(f"- bounding box: ({b['south']:.4f}, {b['west']:.4f}) to ({b['north']:.4f}, {b['east']:.4f})")
+```
+
+```{python}
+#| echo: false
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(figsize=(5, 5))
+ax.scatter(event_df["decimalLongitude"], event_df["decimalLatitude"], s=8, alpha=0.5)
+ax.set_xlabel("longitude")
+ax.set_ylabel("latitude")
+ax.set_title("Event station locations -- sanity check against the managed area(s) above")
+ax.set_aspect("equal")
+plt.show()
+```
+
+## Transformation & column mapping
+
+```{python}
+#| output: asis
+#| echo: false
+print((report_dir / "mapping_reference.md").read_text())
+```
+
+### Applied to this dataset
+
+```{python}
+#| echo: false
+rows = []
+for parameter_id, count in raw_profile["parameter_counts"].items():
+    cfg = vocab.get(parameter_id)
+    rows.append({
+        "ParameterID": parameter_id,
+        "rows": count,
+        "role": cfg["role"] if cfg else "UNMAPPED (raw ParameterName/Units used as-is)",
+        "measurementType / status parameter": (cfg.get("measurementType") or cfg.get("parameter_name")) if cfg else None,
+    })
+pd.DataFrame(rows).sort_values("rows", ascending=False)
+```
+
+```{python}
+#| output: asis
+#| echo: false
+transform_fm, transform_body = read_reviewable_doc(dataset_docs_dir / "transform_notes.md")
+print(review_badge(transform_fm, dataset_docs_dir / "transform_notes.instructions.md"))
+print()
+print(transform_body or "_(nothing drafted yet)_")
+```
+
+## Species observed
+
+```{python}
+#| echo: false
+(
+    occurrence_df
+    .assign(present=lambda d: d["occurrenceStatus"].eq("present"))
+    .groupby(["scientificName", "taxonRank", "scientificNameID"], dropna=False)
+    .agg(occurrences=("occurrenceID", "count"), events_present=("present", "sum"))
+    .reset_index()
+    .sort_values("occurrences", ascending=False)
+)
+```
+
+## Measurements
+
+Validate the transformed values against their documented method/scale (e.g. Braun
+Blanquet scores should fall within `{0.1, 0.5, 1, 2, 3, 4, 5}`).
+
+```{python}
+#| echo: false
+emof_df.groupby("measurementType")["measurementValue"].describe()
+```
+
+```{python}
+#| echo: false
+for measurement_type, group in emof_df.groupby("measurementType"):
+    fig, ax = plt.subplots(figsize=(6, 3))
+    group["measurementValue"].value_counts().sort_index().plot(kind="bar", ax=ax)
+    ax.set_xlabel(measurement_type)
+    ax.set_ylabel("count")
+    plt.show()
+```
+
+## Methods
+
+```{python}
+#| output: asis
+#| echo: false
+if meta["methods"]:
+    print(meta["methods"])
+else:
+    print("Not published on the source page.")
+```
+
+## Download
+
+```{python}
+#| output: asis
+#| echo: false
+print(f"[Download the Darwin Core Archive](downloads/{program_id}/{meta['archive_filename']}) "
+      "-- ready for upload into IPT.")
+```

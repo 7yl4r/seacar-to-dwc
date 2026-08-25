@@ -1,0 +1,9 @@
+---
+title: "SEACAR Darwin Core Datasets"
+---
+
+Each FL SEACAR program run through the `seacar-to-dwc` pipeline gets a Darwin
+Core Archive (Event core + Occurrence + MeasurementOrFact extensions, ready
+for IPT) plus a summary report on this site.
+
+See the [dataset listing](listing.qmd) for the full set.

@@ -17,7 +17,51 @@ python -m seacar_to_dwc.pipeline 570          # one program
 python -m seacar_to_dwc.pipeline --all        # every program in config/datasets.yaml
 ```
 
-Output: `data/05_archive/<program_id>/seacar-<program_id>-dwca.zip`.
+Output: `data/05_archive/<program_id>/seacar-<program_id>-dwca.zip`. Each run also writes
+`data/04_processed/<program_id>/{report_meta.json,raw_data_profile.json}` -- the inputs to the
+quarto report below -- and scaffolds `config/datasets/<program_id>/*.instructions.md` for a
+new program the first time it's run.
+
+## Report site
+
+```
+pip install -e ".[report]"
+cd report && quarto render      # or: quarto preview
+```
+
+Generates a small quarto website (`report/_site/`) with one page per program already run
+through the pipeline above, meant for a reviewer who knows the field program to check the
+pipeline's choices at each step: an AI-drafted raw-data summary, the deterministic raw-data
+profile it was drafted from, the standardized column-mapping writeup plus this dataset's
+transform review notes, validation charts (station map, measurement-value distributions), the
+species/measurement tables, and a download link for that program's DwC-A zip -- plus a
+`listing.qmd` gallery of all of them. See `report/README.md` for how it's wired together
+(adapted from the [quartobatch](https://github.com/7yl4r/quartobatch) batch-report pattern).
+
+### Reviewing/drafting a dataset's writeups
+
+`pipeline.py` scaffolds `config/datasets/<program_id>/{summary,transform_notes}.instructions.md`
+the first time it processes a program (never overwriting a customized copy -- see
+`docs_scaffold.py`). Those instructions files say what to look for; drafting the
+matching `summary.md` / `transform_notes.md` from them plus that run's
+`data/04_processed/<program_id>/raw_data_profile.json` is a manual step (by a human, or by
+asking an AI assistant to do it) -- deliberately not something `pipeline.py` calls out to an
+LLM API for automatically, so the pipeline stays deterministic, offline, and free to run in CI.
+Both files start with a front-matter block:
+
+```yaml
+---
+generated_by: "<model/person>, <date>"
+reviewed: false
+reviewed_by: null
+reviewed_at: null
+---
+```
+
+The report renders whichever is present as a ⚠️ *not yet reviewed* banner until a data manager
+checks it against the real data and flips `reviewed: true` (with their name and date) --
+`reviewed: false` is the correct default for anything an AI drafted and no human has confirmed
+yet, including the example `config/datasets/570/*.md` files committed here.
 
 ## Test
 

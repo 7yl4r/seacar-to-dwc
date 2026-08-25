@@ -7,3 +7,6 @@ data/02_interim/
 data/03_taxonomy_cache/
 data/04_processed/
 data/05_archive/
+report/reports/
+report/_site/
+report/.quarto/

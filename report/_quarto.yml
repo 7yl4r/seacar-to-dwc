@@ -1,0 +1,29 @@
+# pinned explicitly: this machine's default jupyter kernel autodiscovery picks
+# a stale kernelspec (myenv, from an unrelated repo) instead of "python3" --
+# see report/README.md
+jupyter: python3
+
+project:
+  type: website
+  pre-render:
+  - generate_reports.py    # emits reports/<program_id>.qmd for every processed dataset
+  render:
+  - index.qmd
+  - reports/*.qmd
+  - listing.qmd
+
+website:
+  title: "SEACAR Darwin Core Datasets"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: listing.qmd
+        text: Datasets
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-fold: true
+    code-summary: "Show code"

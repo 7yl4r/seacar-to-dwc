@@ -6,12 +6,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 from pathlib import Path
 
 import yaml
 
-from . import archive, discover, fetch, parse, taxonomy, worms
+from . import archive, discover, docs_scaffold, fetch, parse, profile, taxonomy, worms
 from .eml import build_eml
 from .transform.emof import build_emof
 from .transform.event import build_events
@@ -47,8 +48,33 @@ def _date_range(event_df) -> dict | None:
     return {"start": dates.min(), "end": dates.max()}
 
 
+def _report_meta(meta, record_counts: dict, bbox: dict | None, date_range: dict | None) -> dict:
+    """Everything report/template.qmd needs, as JSON -- so the quarto report reads
+    one plain file instead of re-scraping the program page or re-parsing eml.xml."""
+    return {
+        "program_id": meta.program_id,
+        "title": meta.title,
+        "organization": meta.organization,
+        "managed_areas": meta.managed_areas,
+        "habitat": meta.fields.get("Habitats"),
+        "summary": meta.summary,
+        "citation": meta.citation,
+        "methods": meta.methods,
+        "source_url": meta.source_url,
+        "record_counts": record_counts,
+        "bbox": {k: float(v) for k, v in bbox.items()} if bbox else None,
+        "date_range": date_range,
+        "contacts": [
+            {"name": c.name, "role": c.role, "email": c.email} for c in meta.contacts
+        ],
+        "archive_filename": f"seacar-{meta.program_id}-dwca.zip",
+    }
+
+
 def run_pipeline(program_id: int | str, data_root: Path = DEFAULT_DATA_ROOT, config_root: Path = DEFAULT_CONFIG_ROOT) -> Path:
     program_id = str(program_id)
+    docs_scaffold.ensure_dataset_docs(program_id, config_root)
+
     logger.info("=== program %s: discover ===", program_id)
     meta = discover.discover(program_id)
     if not meta.dataset_zip_url:
@@ -70,6 +96,18 @@ def run_pipeline(program_id: int | str, data_root: Path = DEFAULT_DATA_ROOT, con
     with open(config_root / "measurement_vocab.yaml") as f:
         vocab = yaml.safe_load(f)
 
+    processed_dir = data_root / "04_processed" / program_id
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    raw_profile = profile.raw_data_profile(df, species_ref)
+    raw_profile["unmapped_parameters"] = profile.unmapped_parameter_ids(df, vocab)
+    (processed_dir / "raw_data_profile.json").write_text(json.dumps(raw_profile, indent=2))
+    if raw_profile["unresolved_species"]:
+        logger.warning(
+            "program %s: %d SpeciesID(s) in the raw data have no Ref_Species entry at all "
+            "(silently excluded from Occurrence) -- see raw_data_profile.json: unresolved_species",
+            program_id, len(raw_profile["unresolved_species"]),
+        )
+
     logger.info("=== program %s: WoRMS scientificNameID lookup ===", program_id)
     query_names = {
         taxonomy.worms_query_name(taxonomy.lookup(species_ref, sid))
@@ -83,19 +121,19 @@ def run_pipeline(program_id: int | str, data_root: Path = DEFAULT_DATA_ROOT, con
     occurrence_df = build_occurrences(df, species_ref, vocab, lsids=lsids)
     emof_df = build_emof(df, species_ref, vocab)
 
-    processed_dir = data_root / "04_processed" / program_id
-    processed_dir.mkdir(parents=True, exist_ok=True)
     event_df.to_csv(processed_dir / "event.csv", index=False)
     occurrence_df.to_csv(processed_dir / "occurrence.csv", index=False)
     emof_df.to_csv(processed_dir / "emof.csv", index=False)
 
-    logger.info("=== program %s: eml ===", program_id)
-    eml_bytes = build_eml(
-        meta,
-        bbox=_bbox(event_df),
-        date_range=_date_range(event_df),
-        record_counts=_record_counts(event_df, occurrence_df, emof_df),
+    record_counts = _record_counts(event_df, occurrence_df, emof_df)
+    bbox = _bbox(event_df)
+    date_range = _date_range(event_df)
+    (processed_dir / "report_meta.json").write_text(
+        json.dumps(_report_meta(meta, record_counts, bbox, date_range), indent=2)
     )
+
+    logger.info("=== program %s: eml ===", program_id)
+    eml_bytes = build_eml(meta, bbox=bbox, date_range=date_range, record_counts=record_counts)
 
     logger.info("=== program %s: archive ===", program_id)
     archive_dir = data_root / "05_archive" / program_id
