@@ -1,7 +1,7 @@
 """End-to-end orchestration: discover -> fetch -> parse -> transform -> archive.
 
     python -m seacar_to_dwc.pipeline 570
-    python -m seacar_to_dwc.pipeline --all          # every entry in config/datasets.yaml
+    python -m seacar_to_dwc.pipeline --all          # every dataset under datasets/*/summary.md
 """
 from __future__ import annotations
 
@@ -12,8 +12,9 @@ from pathlib import Path
 
 import yaml
 
-from . import archive, discover, docs_scaffold, fetch, parse, profile, taxonomy, worms
+from . import archive, case_study, discover, docs_scaffold, fetch, parse, profile, taxonomy, worms
 from .eml import build_eml
+from .reviewable_docs import read_reviewable_doc
 from .transform.emof import build_emof
 from .transform.event import build_events
 from .transform.occurrence import build_occurrences
@@ -23,6 +24,8 @@ logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_ROOT = REPO_ROOT / "data"
 DEFAULT_CONFIG_ROOT = REPO_ROOT / "config"
+DEFAULT_DATASETS_ROOT = REPO_ROOT / "datasets"
+DEFAULT_REPORT_ROOT = REPO_ROOT / "report"
 
 
 def _record_counts(event_df, occurrence_df, emof_df) -> dict:
@@ -71,9 +74,15 @@ def _report_meta(meta, record_counts: dict, bbox: dict | None, date_range: dict 
     }
 
 
-def run_pipeline(program_id: int | str, data_root: Path = DEFAULT_DATA_ROOT, config_root: Path = DEFAULT_CONFIG_ROOT) -> Path:
+def run_pipeline(
+    program_id: int | str,
+    data_root: Path = DEFAULT_DATA_ROOT,
+    config_root: Path = DEFAULT_CONFIG_ROOT,
+    datasets_root: Path = DEFAULT_DATASETS_ROOT,
+    report_root: Path = DEFAULT_REPORT_ROOT,
+) -> Path:
     program_id = str(program_id)
-    docs_scaffold.ensure_dataset_docs(program_id, config_root)
+    dataset_dir = docs_scaffold.ensure_dataset_docs(program_id, datasets_root)
 
     logger.info("=== program %s: discover ===", program_id)
     meta = discover.discover(program_id)
@@ -128,9 +137,8 @@ def run_pipeline(program_id: int | str, data_root: Path = DEFAULT_DATA_ROOT, con
     record_counts = _record_counts(event_df, occurrence_df, emof_df)
     bbox = _bbox(event_df)
     date_range = _date_range(event_df)
-    (processed_dir / "report_meta.json").write_text(
-        json.dumps(_report_meta(meta, record_counts, bbox, date_range), indent=2)
-    )
+    report_meta = _report_meta(meta, record_counts, bbox, date_range)
+    (processed_dir / "report_meta.json").write_text(json.dumps(report_meta, indent=2))
 
     logger.info("=== program %s: eml ===", program_id)
     eml_bytes = build_eml(meta, bbox=bbox, date_range=date_range, record_counts=record_counts)
@@ -142,6 +150,14 @@ def run_pipeline(program_id: int | str, data_root: Path = DEFAULT_DATA_ROOT, con
         archive_name=f"seacar-{program_id}-dwca",
     )
     logger.info("program %s: archive ready at %s", program_id, zip_path)
+
+    logger.info("=== program %s: case study ===", program_id)
+    mapping_reference_text = (report_root / "mapping_reference.md").read_text()
+    case_study_text = case_study.assemble_case_study(
+        program_id, dataset_dir, report_meta, raw_profile, vocab["parameters"], mapping_reference_text,
+    )
+    (dataset_dir / "README.md").write_text(case_study_text)
+
     return zip_path
 
 
@@ -149,18 +165,24 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("program_id", nargs="?", help="SEACAR program ID, e.g. 570")
-    ap.add_argument("--all", action="store_true", help="run every dataset listed in config/datasets.yaml")
+    ap.add_argument("--all", action="store_true", help="run every dataset under datasets/*/summary.md")
     ap.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
     ap.add_argument("--config-root", type=Path, default=DEFAULT_CONFIG_ROOT)
+    ap.add_argument("--datasets-root", type=Path, default=DEFAULT_DATASETS_ROOT)
+    ap.add_argument("--report-root", type=Path, default=DEFAULT_REPORT_ROOT)
     args = ap.parse_args()
 
     if args.all:
-        with open(args.config_root / "datasets.yaml") as f:
-            datasets = yaml.safe_load(f)["datasets"]
-        for entry in datasets:
-            run_pipeline(entry["program_id"], args.data_root, args.config_root)
+        summaries = sorted(
+            p for p in args.datasets_root.glob("*/summary.md") if not p.parent.name.startswith("_")
+        )
+        if not summaries:
+            ap.error(f"no datasets found under {args.datasets_root}/*/summary.md")
+        for summary_path in summaries:
+            front_matter, _ = read_reviewable_doc(summary_path)
+            run_pipeline(front_matter["program_id"], args.data_root, args.config_root, args.datasets_root, args.report_root)
     elif args.program_id:
-        run_pipeline(args.program_id, args.data_root, args.config_root)
+        run_pipeline(args.program_id, args.data_root, args.config_root, args.datasets_root, args.report_root)
     else:
         ap.error("pass a program_id or --all")
 

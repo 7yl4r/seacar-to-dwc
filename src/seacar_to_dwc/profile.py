@@ -2,7 +2,7 @@
 network, just counts and cross-references against Ref_Species /
 measurement_vocab.yaml.
 
-This is the grounding data for config/datasets/<id>/summary.md and
+This is the grounding data for datasets/<id>/summary.md and
 transform_notes.md (see docs_scaffold.py): a human or an AI drafting those
 free-text write-ups should read this JSON rather than eyeball the raw file
 by hand, and report/template.qmd renders it directly as its own "raw data

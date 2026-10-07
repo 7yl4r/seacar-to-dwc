@@ -3,6 +3,16 @@ code (`src/seacar_to_dwc/transform/`), not configured per program. What varies
 per dataset is *which* of these rules actually fire on its data; see
 "Applied to this dataset" below for that.
 
+**Target standard.** This Event+Occurrence+EMoF layout, and `scientificNameID` as a WoRMS
+LSID, follow the GOOS Seagrass Essential Ocean Variable specification: Duffy et al. (2026),
+["Measuring and Reporting on Seagrass as an Essential Ocean Variable for Science and
+Management"](https://doi.org/10.1093/biosci/biaf199), *BioScience* 76(4):359-374, and its data
+dictionary (`report/references/duffy-et-al.pdf`, `duffy-supplement.pdf`). That spec's standard
+`measurementType` vocabulary reports seagrass cover as `percentCover` (a defined percentage),
+not a raw Braun-Blanquet class -- this pipeline still reports the raw
+`"Percent Cover (Braun-Blanquet cover-abundance score)"` value today; converting to `percentCover`
+via the documented class-midpoint mapping is a tracked follow-up (see the top-level README).
+
 **Grain.** One Event = one quadrat read at one station on one date
 (`ProgramID, ProgramLocationID, SampleDate, QuadIdentifier`).
 
